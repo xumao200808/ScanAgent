@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScanAgent - 扫描仪采集</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status-bar.online {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-bar.offline {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-bar.checking {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .status-bar.online .status-dot {
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .status-bar.offline .status-dot {
+            background: #dc3545;
+        }
+
+        .status-bar.checking .status-dot {
+            background: #ffc107;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+
+        .section h2 {
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .form-group select,
+        .form-group input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-group select:focus,
+        .form-group input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .scanners-list {
+            list-style: none;
+        }
+
+        .scanner-item {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .scanner-item:hover {
+            background: #f8f9fa;
+            border-color: #007bff;
+        }
+
+        .scanner-item.selected {
+            background: #e7f3ff;
+            border-color: #007bff;
+        }
+
+        .scanner-item .name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .scanner-item .id {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .preview-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preview-item:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 200px;
+            object-fit: contain;
+            background: #f5f5f5;
+        }
+
+        .preview-item .info {
+            padding: 8px;
+            background: white;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .loading::after {
+            content: '';
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #f5c6cb;
+            margin-bottom: 20px;
+        }
+
+        .help-text {
+            background: #e7f3ff;
+            color: #004085;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #b8daff;
+            margin-bottom: 20px;
+        }
+
+        .help-text h3 {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .help-text ul {
+            margin-left: 20px;
+        }
+
+        .help-text li {
+            margin-bottom: 5px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .error-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .error-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .error-content h3 {
+            color: #d32f2f;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .error-content p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .error-content .btn {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .shortcuts-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .shortcuts-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .shortcuts-content h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        .shortcuts-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .shortcuts-content td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .shortcuts-content td:first-child {
+            width: 40%;
+            font-weight: 500;
+        }
+
+        .shortcuts-content kbd {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-family: monospace;
+            font-size: 14px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 ScanAgent - 扫描仪采集</h1>
+
+        <div id="statusBar" class="status-bar checking">
+            <div class="status-dot"></div>
+            <span id="statusText">正在检测 ScanAgent...</span>
+            <button class="btn btn-secondary" style="margin-left: auto;" onclick="showKeyboardShortcuts()">⌨️ 快捷键</button>
+            <button class="btn btn-secondary" onclick="checkAgent()">重新检测</button>
+        </div>
+
+        <div id="offlineHelp" class="help-text hidden">
+            <h3>❌ ScanAgent 未运行</h3>
+            <p>请按照以下步骤启动 ScanAgent：</p>
+            <ul>
+                <li>打开命令提示符或 PowerShell</li>
+                <li>导航到 ScanAgent 目录：<code>cd scan-agent/ScanAgent</code></li>
+                <li>运行：<code>dotnet run</code></li>
+                <li>保持命令窗口打开，然后刷新此页面</li>
+            </ul>
+        </div>
+
+        <div id="mainContent" class="hidden">
+            <div class="section">
+                <h2>🔍 选择扫描仪</h2>
+                <div id="scannersList" class="scanners-list"></div>
+            </div>
+
+            <div class="section">
+                <h2>⚙️ 扫描参数</h2>
+                <div class="form-group">
+                    <label for="dpi">DPI (分辨率)</label>
+                    <select id="dpi">
+                        <option value="150">150 DPI (快速)</option>
+                        <option value="300" selected>300 DPI (标准)</option>
+                        <option value="600">600 DPI (高清)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="colorMode">颜色模式</label>
+                    <select id="colorMode">
+                        <option value="gray" selected>灰度</option>
+                        <option value="color">彩色</option>
+                        <option value="bw">黑白</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="paperSize">纸张尺寸</label>
+                    <select id="paperSize">
+                        <option value="A4" selected>A4 (210×297mm)</option>
+                        <option value="A3">A3 (297×420mm)</option>
+                        <option value="Letter">Letter (215.9×279.4mm)</option>
+                        <option value="Legal">Legal (215.9×355.6mm)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="duplex">
+                        <label for="duplex">双面扫描</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoFeed" checked>
+                        <label for="autoFeed">自动进纸</label>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button id="scanBtn" class="btn btn-primary" onclick="startScan()">开始扫描</button>
+                </div>
+            </div>
+
+            <div id="scanProgress" class="section hidden">
+                <h2>⏳ 扫描中...</h2>
+                <div class="loading"></div>
+            </div>
+
+            <div id="scanPreview" class="section hidden">
+                <h2>📷 扫描预览</h2>
+                <p id="imageCount" style="color: #666; margin-bottom: 15px;"></p>
+                <div id="previewGrid" class="preview-grid"></div>
+                <div class="button-group">
+                    <button class="btn btn-success" onclick="uploadImages()">上传并识别</button>
+                    <button class="btn btn-secondary" onclick="resetScan()">重新扫描</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const AGENT_URL = 'http://127.0.0.1:17289';
+        const BACKEND_URL = 'http://localhost:5000';
+        let selectedScanner = null;
+        let scanResult = null;
+        let images = [];
+
+        const ERROR_MESSAGES = {
+            'agent_offline': 'ScanAgent 未运行，请先启动 ScanAgent.exe',
+            'scanner_not_found': '未找到扫描仪，请检查扫描仪连接',
+            'scanner_busy': '扫描仪忙碌，请稍后重试',
+            'scan_failed': '扫描失败，请检查扫描仪状态',
+            'twain_not_available': 'TWAIN 驱动不可用，请检查驱动安装',
+            'upload_failed': '上传失败，请检查后端服务',
+            'network_error': '网络错误，请检查网络连接',
+            'timeout': '操作超时，请重试',
+            'unknown': '未知错误，请联系技术支持'
+        };
+
+        function getErrorMessage(errorCode, fallbackMessage) {
+            return ERROR_MESSAGES[errorCode] || fallbackMessage || ERROR_MESSAGES['unknown'];
+        }
+
+        function showError(title, message, canRetry = false, retryCallback = null) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-modal';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'error-content';
+            
+            const titleElement = document.createElement('h3');
+            titleElement.textContent = '❌ ' + title;
+            
+            const messageElement = document.createElement('p');
+            messageElement.textContent = message;
+            
+            contentDiv.appendChild(titleElement);
+            contentDiv.appendChild(messageElement);
+            
+            if (canRetry) {
+                const retryButton = document.createElement('button');
+                retryButton.className = 'btn btn-primary';
+                retryButton.textContent = '重试';
+                retryButton.onclick = () => {
+                    errorDiv.remove();
+                    if (window.currentRetryCallback) {
+                        window.currentRetryCallback();
+                    }
+                };
+                contentDiv.appendChild(retryButton);
+            }
+            
+            const closeButton = document.createElement('button');
+            closeButton.className = 'btn btn-secondary';
+            closeButton.textContent = '关闭';
+            closeButton.onclick = () => {
+                errorDiv.remove();
+            };
+            contentDiv.appendChild(closeButton);
+            
+            errorDiv.appendChild(contentDiv);
+            document.body.appendChild(errorDiv);
+
+            if (canRetry && retryCallback) {
+                window.currentRetryCallback = () => {
+                    errorDiv.remove();
+                    retryCallback();
+                };
+            }
+        }
+
+        async function fetchWithRetry(url, options = {}, maxRetries = 3, retryDelay = 1000) {
+            let lastError;
+            
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    const response = await fetch(url, options);
+                    return response;
+                } catch (error) {
+                    lastError = error;
+                    console.warn(`请求失败 (尝试 ${attempt}/${maxRetries}):`, error);
+                    
+                    if (attempt < maxRetries) {
+                        console.log(`等待 ${retryDelay}ms 后重试...`);
+                        await new Promise(resolve => setTimeout(resolve, retryDelay));
+                        retryDelay *= 2;
+                    }
+                }
+            }
+            
+            throw lastError;
+        }
+
+        async function checkAgent() {
+            const statusBar = document.getElementById('statusBar');
+            const statusText = document.getElementById('statusText');
+            const offlineHelp = document.getElementById('offlineHelp');
+            const mainContent = document.getElementById('mainContent');
+
+            statusBar.className = 'status-bar checking';
+            statusText.textContent = '正在检测 ScanAgent...';
+
+            try {
+                const response = await fetch(`${AGENT_URL}/ping`);
+                const data = await response.json();
+
+                if (data.status === 'ok') {
+                    statusBar.className = 'status-bar online';
+                    statusText.textContent = `✅ ScanAgent 在线 (v${data.version})`;
+                    offlineHelp.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                    loadScanners();
+                }
+            } catch (error) {
+                statusBar.className = 'status-bar offline';
+                statusText.textContent = '❌ ScanAgent 未运行';
+                offlineHelp.classList.remove('hidden');
+                mainContent.classList.add('hidden');
+            }
+        }
+
+        async function loadScanners() {
+            const scannersList = document.getElementById('scannersList');
+            scannersList.innerHTML = '<div class="loading"></div>';
+
+            try {
+                const response = await fetchWithRetry(`${AGENT_URL}/scanners`, {}, 2, 500);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.scanners && data.scanners.length > 0) {
+                    scannersList.innerHTML = '';
+                    data.scanners.forEach((scanner, index) => {
+                        const item = document.createElement('div');
+                        item.className = 'scanner-item' + (scanner.default ? ' selected' : '');
+                        
+                        const nameDiv = document.createElement('div');
+                        nameDiv.className = 'name';
+                        nameDiv.textContent = scanner.name;
+                        
+                        const idDiv = document.createElement('div');
+                        idDiv.className = 'id';
+                        idDiv.textContent = `ID: ${scanner.id}`;
+                        
+                        item.appendChild(nameDiv);
+                        item.appendChild(idDiv);
+                        item.onclick = () => selectScanner(scanner, item);
+                        scannersList.appendChild(item);
+
+                        if (scanner.default) {
+                            selectedScanner = scanner;
+                        }
+                    });
+                } else {
+                    scannersList.innerHTML = '<p style="color: #999;">未找到扫描仪</p>';
+                    showError('未找到扫描仪', getErrorMessage('scanner_not_found'), false);
+                }
+            } catch (error) {
+                scannersList.innerHTML = '<p style="color: #d32f2f;">加载扫描仪列表失败</p>';
+                showError('加载扫描仪失败', getErrorMessage('scanner_not_found', error.message), true, loadScanners);
+            }
+        }
+
+        function selectScanner(scanner, element) {
+            document.querySelectorAll('.scanner-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            selectedScanner = scanner;
+        }
+
+        async function startScan() {
+            if (!selectedScanner) {
+                showError('未选择扫描仪', '请先选择一个扫描仪', false);
+                return;
+            }
+
+            const scanBtn = document.getElementById('scanBtn');
+            const scanProgress = document.getElementById('scanProgress');
+            const scanPreview = document.getElementById('scanPreview');
+
+            scanBtn.disabled = true;
+            scanProgress.classList.remove('hidden');
+            scanPreview.classList.add('hidden');
+
+            const request = {
+                scannerId: selectedScanner.id,
+                dpi: parseInt(document.getElementById('dpi').value),
+                colorMode: document.getElementById('colorMode').value,
+                paperSize: document.getElementById('paperSize').value,
+                duplex: document.getElementById('duplex').checked,
+                autoFeed: document.getElementById('autoFeed').checked
+            };
+
+            try {
+                const response = await fetch(`${AGENT_URL}/scan`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(request)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || '扫描失败');
+                }
+
+                scanResult = await response.json();
+                await loadImages();
+            } catch (error) {
+                if (error.message.includes('timeout')) {
+                    showError('扫描超时', getErrorMessage('timeout'), true, startScan);
+                } else if (error.message.includes('busy')) {
+                    showError('扫描仪忙碌', getErrorMessage('scanner_busy'), true, startScan);
+                } else {
+                    showError('扫描失败', getErrorMessage('scan_failed', error.message), true, startScan);
+                }
+            } finally {
+                scanBtn.disabled = false;
+                scanProgress.classList.add('hidden');
+            }
+        }
+
+        async function loadImages() {
+            const scanPreview = document.getElementById('scanPreview');
+            const previewGrid = document.getElementById('previewGrid');
+            const imageCount = document.getElementById('imageCount');
+
+            if (!scanResult || !scanResult.images || scanResult.images.length === 0) {
+                alert('未获取到扫描图像');
+                return;
+            }
+
+            images.forEach(img => URL.revokeObjectURL(img.url));
+            images = [];
+            previewGrid.innerHTML = '';
+
+            const newImages = [];
+            
+            for (const imageInfo of scanResult.images) {
+                try {
+                    const response = await fetch(`${AGENT_URL}/files/${imageInfo.id}`);
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+
+                    newImages.push({
+                        id: imageInfo.id,
+                        blob: blob,
+                        url: url
+                    });
+
+                    const item = document.createElement('div');
+                    item.className = 'preview-item';
+                    
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.alt = '扫描图像';
+                    
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'info';
+                    infoDiv.textContent = '图像 ' + imageInfo.id;
+                    
+                    item.appendChild(img);
+                    item.appendChild(infoDiv);
+                    item.onclick = () => window.open(url, '_blank');
+                    previewGrid.appendChild(item);
+                } catch (error) {
+                    console.error(`加载图像 ${imageInfo.id} 失败:`, error);
+                }
+            }
+
+            images = newImages;
+            imageCount.textContent = `共 ${images.length} 张图像`;
+            scanPreview.classList.remove('hidden');
+        }
+
+        async function uploadImages() {
+            if (images.length === 0) {
+                showError('没有可上传的图像', '请先执行扫描操作', false);
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                images.forEach((img, index) => {
+                    const file = new File([img.blob], `page_${index + 1}.png`, { type: 'image/png' });
+                    formData.append('files', file);
+                });
+
+                const response = await fetchWithRetry(`${BACKEND_URL}/api/convert`, {
+                    method: 'POST',
+                    body: formData
+                }, 2, 1000);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (result.job_id) {
+                    alert(`上传成功！\n\nJob ID: ${result.job_id}\n\n图像已进入 OCR 处理流程。`);
+                    console.log('上传成功:', result);
+                } else {
+                    throw new Error('未返回有效的 job_id');
+                }
+            } catch (error) {
+                if (error.message.includes('Failed to fetch')) {
+                    showError('上传失败', getErrorMessage('upload_failed') + '\n\n请确保后端服务运行在 ' + BACKEND_URL, true, uploadImages);
+                } else {
+                    showError('上传失败', getErrorMessage('upload_failed', error.message), true, uploadImages);
+                }
+            }
+        }
+
+        function resetScan() {
+            const scanPreview = document.getElementById('scanPreview');
+            const previewGrid = document.getElementById('previewGrid');
+
+            images.forEach(img => URL.revokeObjectURL(img.url));
+            images = [];
+            scanResult = null;
+            previewGrid.innerHTML = '';
+            scanPreview.classList.add('hidden');
+        }
+
+        function handleKeyboardShortcuts(event) {
+            const key = event.key.toLowerCase();
+            
+            switch (key) {
+                case 'escape':
+                    event.preventDefault();
+                    const scanPreview = document.getElementById('scanPreview');
+                    if (!scanPreview.classList.contains('hidden')) {
+                        resetScan();
+                    }
+                    break;
+                    
+                case 'enter':
+                    if (event.ctrlKey) {
+                        event.preventDefault();
+                        const scanBtn = document.getElementById('scanBtn');
+                        if (!scanBtn.disabled) {
+                            startScan();
+                        }
+                    }
+                    break;
+                    
+                case 'r':
+                    if (event.ctrlKey) {
+                        event.preventDefault();
+                        const scanPreview = document.getElementById('scanPreview');
+                        if (!scanPreview.classList.contains('hidden')) {
+                            resetScan();
+                        }
+                    }
+                    break;
+                    
+                case 'u':
+                    if (event.ctrlKey) {
+                        event.preventDefault();
+                        const scanPreview = document.getElementById('scanPreview');
+                        if (!scanPreview.classList.contains('hidden')) {
+                            uploadImages();
+                        }
+                    }
+                    break;
+            }
+        }
+
+        function showKeyboardShortcuts() {
+            const shortcutsDiv = document.createElement('div');
+            shortcutsDiv.className = 'shortcuts-modal';
+            shortcutsDiv.innerHTML = `
+                <div class="shortcuts-content">
+                    <h3>⌨️ 键盘快捷键</h3>
+                    <table>
+                        <tr>
+                            <td><kbd>Ctrl + Enter</kbd></td>
+                            <td>开始扫描</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl + U</kbd></td>
+                            <td>上传图像</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl + R</kbd></td>
+                            <td>重新扫描</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Esc</kbd></td>
+                            <td>关闭预览 / 取消操作</td>
+                        </tr>
+                    </table>
+                    <button class="btn btn-secondary" onclick="this.parentElement.parentElement.remove()">关闭</button>
+                </div>
+            `;
+            document.body.appendChild(shortcutsDiv);
+        }
+
+        // Page load
+        document.addEventListener('keydown', handleKeyboardShortcuts);
+        checkAgent();
+    </script>
+</body>
+</html>
