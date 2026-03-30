@@ -203,10 +203,57 @@
             background: #c82333;
         }
 
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #138496;
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .btn-active {
+            background: #28a745 !important;
+            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+        }
+
         .button-group {
             display: flex;
             gap: 10px;
             margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .driver-selector {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .driver-info {
+            background: #e7f3ff;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            border-left: 4px solid #007bff;
+        }
+
+        .driver-info strong {
+            color: #004085;
         }
 
         .scanners-list {
@@ -275,6 +322,36 @@
             background: white;
             font-size: 12px;
             color: #666;
+        }
+
+        .preview-item .actions {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .preview-item .action-btn {
+            flex: 1;
+            padding: 3px 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 10px;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preview-item .action-btn:hover {
+            background: #e9ecef;
+        }
+
+        .preview-item .action-btn.delete {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .preview-item .action-btn.delete:hover {
+            background: #ffcdd2;
         }
 
         .loading {
@@ -440,13 +517,37 @@
             <p>请按照以下步骤启动 ScanAgent：</p>
             <ul>
                 <li>打开命令提示符或 PowerShell</li>
-                <li>导航到 ScanAgent 目录：<code>cd scan-agent/ScanAgent</code></li>
+                <li>导航到 ScanAgent 目录</li>
                 <li>运行：<code>dotnet run</code></li>
                 <li>保持命令窗口打开，然后刷新此页面</li>
             </ul>
         </div>
 
         <div id="mainContent" class="hidden">
+            <div class="section">
+                <h2>🔧 选择驱动类型</h2>
+                <div class="driver-info">
+                    <strong>当前驱动：</strong><span id="currentDriverType">Auto</span>
+                    <br>
+                    <strong>可用扫描仪：</strong><span id="availableScannersCount">0</span>
+                </div>
+                <div class="driver-selector">
+                    <button class="btn btn-secondary btn-sm" onclick="setDriverType('Auto')">自动选择</button>
+                    <button class="btn btn-secondary btn-sm" onclick="setDriverType('Wia')">WIA 驱动</button>
+                    <button class="btn btn-secondary btn-sm" onclick="setDriverType('Twain')">TWAIN 驱动</button>
+                    <button class="btn btn-success btn-sm" onclick="setDriverType('EZTwain')">EZTwain 驱动</button>
+                    <button class="btn btn-secondary btn-sm" onclick="setDriverType('Virtual')">虚拟扫描</button>
+                </div>
+                <div class="button-group" style="margin-top: 15px;">
+                    <button class="btn btn-warning btn-sm" onclick="registerKodakDriver()">🔧 注册 Kodak 驱动</button>
+                    <button class="btn btn-danger btn-sm" onclick="unregisterKodakDriver()">❌ 取消注册 Kodak 驱动</button>
+                    <button class="btn btn-info btn-sm" onclick="listTwainSources()">📋 查看 TWAIN 数据源</button>
+                </div>
+                <div class="help-text" style="margin-top: 15px;">
+                    <strong>提示：</strong>推荐先尝试 <strong>EZTwain 驱动</strong>（与 Delphi 程序使用相同的方式）。如果不行，再尝试"注册 Kodak 驱动"（需要以管理员身份运行 ScanAgent）。测试完成后，可以点击"取消注册 Kodak 驱动"来恢复。
+                </div>
+            </div>
+
             <div class="section">
                 <h2>🔍 选择扫描仪</h2>
                 <div id="scannersList" class="scanners-list"></div>
@@ -524,6 +625,7 @@
         let selectedScanner = null;
         let scanResult = null;
         let images = [];
+        let currentDriverType = 'Auto';
 
         const ERROR_MESSAGES = {
             'agent_offline': 'ScanAgent 未运行，请先启动 ScanAgent.exe',
@@ -629,13 +731,120 @@
                     statusText.textContent = `✅ ScanAgent 在线 (v${data.version})`;
                     offlineHelp.classList.add('hidden');
                     mainContent.classList.remove('hidden');
-                    loadScanners();
+                    loadStatus();
                 }
             } catch (error) {
                 statusBar.className = 'status-bar offline';
                 statusText.textContent = '❌ ScanAgent 未运行';
                 offlineHelp.classList.remove('hidden');
                 mainContent.classList.add('hidden');
+            }
+        }
+
+        async function loadStatus() {
+            try {
+                const response = await fetch(`${AGENT_URL}/status`);
+                if (response.ok) {
+                    const status = await response.json();
+                    currentDriverType = status.CurrentServiceType || 'Auto';
+                    document.getElementById('currentDriverType').textContent = currentDriverType;
+                    document.getElementById('availableScannersCount').textContent = status.AvailableScanners || 0;
+                    updateDriverButtons();
+                    loadScanners();
+                }
+            } catch (error) {
+                console.error('加载状态失败:', error);
+            }
+        }
+
+        function updateDriverButtons() {
+            const buttons = document.querySelectorAll('.driver-selector .btn');
+            buttons.forEach(btn => {
+                if (btn.textContent.includes(currentDriverType) || 
+                    (currentDriverType === 'Auto' && btn.textContent.includes('自动'))) {
+                    btn.classList.add('btn-active');
+                } else {
+                    btn.classList.remove('btn-active');
+                }
+            });
+        }
+
+        async function setDriverType(type) {
+            try {
+                const response = await fetch(`${AGENT_URL}/service-type?type=${type}`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const status = await response.json();
+                    currentDriverType = status.CurrentServiceType || type;
+                    document.getElementById('currentDriverType').textContent = currentDriverType;
+                    document.getElementById('availableScannersCount').textContent = status.AvailableScanners || 0;
+                    updateDriverButtons();
+                    loadScanners();
+                } else {
+                    const errorData = await response.json();
+                    showError('切换驱动失败', errorData.message || '无法切换驱动类型');
+                }
+            } catch (error) {
+                showError('切换驱动失败', getErrorMessage('network_error', error.message), true, () => setDriverType(type));
+            }
+        }
+
+        async function registerKodakDriver() {
+            try {
+                if (!confirm('确定要注册 Kodak 驱动吗？\n\n注意：需要以管理员身份运行 ScanAgent 才能修改注册表。')) {
+                    return;
+                }
+
+                const response = await fetch(`${AGENT_URL}/register-kodak`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    alert(data.message || 'Kodak 驱动注册成功！\n\n请重启 ScanAgent 并刷新页面。');
+                } else {
+                    showError('注册失败', data.message || '无法注册 Kodak 驱动');
+                }
+            } catch (error) {
+                showError('注册失败', getErrorMessage('network_error', error.message), true, registerKodakDriver);
+            }
+        }
+
+        async function listTwainSources() {
+            try {
+                const response = await fetch(`${AGENT_URL}/list-twain-sources`);
+
+                const data = await response.json();
+                if (response.ok) {
+                    alert(data.message || '已列出 TWAIN 数据源！\n\n请查看命令行窗口了解详细信息。');
+                } else {
+                    showError('查询失败', data.message || '无法列出 TWAIN 数据源');
+                }
+            } catch (error) {
+                showError('查询失败', getErrorMessage('network_error', error.message), true, listTwainSources);
+            }
+        }
+
+        async function unregisterKodakDriver() {
+            try {
+                if (!confirm('确定要取消注册 Kodak 驱动吗？\n\n这将从注册表中移除我们添加的 Kodak 驱动，原来的 Delphi 程序应该不受影响。\n\n需要以管理员身份运行 ScanAgent。')) {
+                    return;
+                }
+
+                const response = await fetch(`${AGENT_URL}/unregister-kodak`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    alert(data.message || 'Kodak 驱动取消注册成功！\n\n请重启 ScanAgent 并刷新页面。');
+                } else {
+                    showError('取消注册失败', data.message || '无法取消注册 Kodak 驱动');
+                }
+            } catch (error) {
+                showError('取消注册失败', getErrorMessage('network_error', error.message), true, unregisterKodakDriver);
             }
         }
 
@@ -676,9 +885,10 @@
                         }
                     });
                 } else {
-                    scannersList.innerHTML = '<p style="color: #999;">未找到扫描仪</p>';
-                    showError('未找到扫描仪', getErrorMessage('scanner_not_found'), false);
+                    scannersList.innerHTML = '<p style="color: #999;">未找到扫描仪，请尝试切换驱动类型</p>';
                 }
+                
+                document.getElementById('availableScannersCount').textContent = (data.scanners || []).length;
             } catch (error) {
                 scannersList.innerHTML = '<p style="color: #d32f2f;">加载扫描仪列表失败</p>';
                 showError('加载扫描仪失败', getErrorMessage('scanner_not_found', error.message), true, loadScanners);
@@ -771,22 +981,66 @@
                     newImages.push({
                         id: imageInfo.id,
                         blob: blob,
-                        url: url
+                        url: url,
+                        rotation: 0
                     });
 
                     const item = document.createElement('div');
                     item.className = 'preview-item';
+                    item.dataset.imageId = imageInfo.id;
                     
                     const img = document.createElement('img');
                     img.src = url;
                     img.alt = '扫描图像';
+                    img.style.transition = 'transform 0.3s';
                     
                     const infoDiv = document.createElement('div');
                     infoDiv.className = 'info';
                     infoDiv.textContent = '图像 ' + imageInfo.id;
                     
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'actions';
+                    
+                    const rotateLeftBtn = document.createElement('button');
+                    rotateLeftBtn.className = 'action-btn';
+                    rotateLeftBtn.textContent = '左旋转';
+                    rotateLeftBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        rotateImage(imageInfo.id, -90);
+                    };
+                    
+                    const rotateRightBtn = document.createElement('button');
+                    rotateRightBtn.className = 'action-btn';
+                    rotateRightBtn.textContent = '右旋转';
+                    rotateRightBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        rotateImage(imageInfo.id, 90);
+                    };
+                    
+                    const rotate180Btn = document.createElement('button');
+                    rotate180Btn.className = 'action-btn';
+                    rotate180Btn.textContent = '180°';
+                    rotate180Btn.onclick = (e) => {
+                        e.stopPropagation();
+                        rotateImage(imageInfo.id, 180);
+                    };
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'action-btn delete';
+                    deleteBtn.textContent = '删除';
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteImage(imageInfo.id);
+                    };
+                    
+                    actionsDiv.appendChild(rotateLeftBtn);
+                    actionsDiv.appendChild(rotateRightBtn);
+                    actionsDiv.appendChild(rotate180Btn);
+                    actionsDiv.appendChild(deleteBtn);
+                    
                     item.appendChild(img);
                     item.appendChild(infoDiv);
+                    item.appendChild(actionsDiv);
                     item.onclick = () => window.open(url, '_blank');
                     previewGrid.appendChild(item);
                 } catch (error) {
@@ -846,6 +1100,47 @@
             scanResult = null;
             previewGrid.innerHTML = '';
             scanPreview.classList.add('hidden');
+        }
+
+        function rotateImage(imageId, degrees) {
+            const image = images.find(img => img.id === imageId);
+            if (!image) return;
+
+            image.rotation = (image.rotation + degrees + 360) % 360;
+
+            const previewItem = document.querySelector(`.preview-item[data-image-id="${imageId}"]`);
+            if (previewItem) {
+                const img = previewItem.querySelector('img');
+                if (img) {
+                    img.style.transform = `rotate(${image.rotation}deg)`;
+                }
+            }
+
+            console.log(`旋转图像 ${imageId} 到 ${image.rotation}°`);
+        }
+
+        function deleteImage(imageId) {
+            if (!confirm('确定要删除这张图像吗？')) {
+                return;
+            }
+
+            const index = images.findIndex(img => img.id === imageId);
+            if (index === -1) return;
+
+            const image = images[index];
+            URL.revokeObjectURL(image.url);
+
+            images.splice(index, 1);
+
+            const previewItem = document.querySelector(`.preview-item[data-image-id="${imageId}"]`);
+            if (previewItem) {
+                previewItem.remove();
+            }
+
+            const imageCount = document.getElementById('imageCount');
+            imageCount.textContent = `共 ${images.length} 张图像`;
+
+            console.log(`删除图像 ${imageId}`);
         }
 
         function handleKeyboardShortcuts(event) {
@@ -922,7 +1217,6 @@
             document.body.appendChild(shortcutsDiv);
         }
 
-        // Page load
         document.addEventListener('keydown', handleKeyboardShortcuts);
         checkAgent();
     </script>

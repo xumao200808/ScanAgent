@@ -18,11 +18,24 @@ public class TrayApplicationContext : ApplicationContext
     private readonly NotifyIcon _notifyIcon;
     private readonly DateTime _startTime = DateTime.Now;
     private Icon? _trayIcon;
+    private readonly Form _hiddenWindow;
+
+    public IntPtr MainWindowHandle => _hiddenWindow.Handle;
 
     public TrayApplicationContext(CancellationTokenSource cts, TempFileManager fileManager)
     {
         _cts = cts;
         _fileManager = fileManager;
+
+        // 创建一个隐藏的窗口用于 TWAIN 操作
+        _hiddenWindow = new Form
+        {
+            Text = "ScanAgent TWAIN Window",
+            ShowInTaskbar = false,
+            WindowState = FormWindowState.Minimized,
+            Opacity = 0
+        };
+        _hiddenWindow.CreateControl();
 
         _trayIcon = CreateTrayIcon();
         _notifyIcon = new NotifyIcon

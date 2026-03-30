@@ -10,4 +10,8 @@
   <ItemGroup>
     <PackageReference Include="NTwain" Version="3.7.5" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="EZTW32.DLL" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -26,8 +26,14 @@ static class Program
 
         var app = builder.Build();
 
+        // Create hidden form to get window handle for TWAIN
+        var hiddenForm = new Form { Text = "ScanAgent Hidden Form", ShowInTaskbar = false };
+        var windowHandle = hiddenForm.Handle;
+        var scannerFactory = app.Services.GetRequiredService<ScannerFactory>();
+        scannerFactory.SetWindowHandle(windowHandle);
+
         app.UseCors(policy => policy
-            .WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+            .AllowAnyOrigin()
             .AllowAnyMethod()
             .AllowAnyHeader());
 
@@ -94,10 +100,123 @@ static class Program
             return Results.Ok(new { status = "ok" });
         });
 
+        app.MapGet("/status", (ScannerFactory factory) =>
+        {
+            try
+            {
+                var status = factory.GetServiceStatus();
+                return Results.Ok(status);
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(
+                    new { error = "status_check_failed", message = ex.Message },
+                    statusCode: 500);
+            }
+        });
+
+        app.MapPost("/service-type", (string type, ScannerFactory factory) =>
+        {
+            try
+            {
+                if (Enum.TryParse<ScannerServiceType>(type, true, out var serviceType))
+                {
+                    factory.SetServiceType(serviceType);
+                    var status = factory.GetServiceStatus();
+                    return Results.Ok(status);
+                }
+                else
+                {
+                    return Results.Json(
+                        new { error = "invalid_service_type", message = "Invalid service type. Valid values: Auto, Wia, Twain, Virtual" },
+                        statusCode: 400);
+                }
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(
+                    new { error = "service_type_change_failed", message = ex.Message },
+                    statusCode: 500);
+            }
+        });
+
+        app.MapPost("/register-kodak", () =>
+        {
+            try
+            {
+                var result = TwainRegistryHelper.RegisterKodakDriver();
+                if (result.Success)
+                {
+                    return Results.Ok(new { status = "ok", message = result.Message });
+                }
+                else
+                {
+                    return Results.Json(
+                        new { error = "registration_failed", message = result.Message },
+                        statusCode: 400);
+                }
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(
+                    new { error = "registration_failed", message = ex.Message },
+                    statusCode: 500);
+            }
+        });
+
+        app.MapGet("/list-twain-sources", () =>
+        {
+            try
+            {
+                var result = TwainRegistryHelper.ListRegisteredSources();
+                if (result.Success)
+                {
+                    return Results.Ok(new { status = "ok", message = result.Message });
+                }
+                else
+                {
+                    return Results.Json(
+                        new { error = "list_failed", message = result.Message },
+                        statusCode: 400);
+                }
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(
+                    new { error = "list_failed", message = ex.Message },
+                    statusCode: 500);
+            }
+        });
+
+        app.MapPost("/unregister-kodak", () =>
+        {
+            try
+            {
+                var result = TwainRegistryHelper.UnregisterKodakDriver();
+                if (result.Success)
+                {
+                    return Results.Ok(new { status = "ok", message = result.Message });
+                }
+                else
+                {
+                    return Results.Json(
+                        new { error = "unregistration_failed", message = result.Message },
+                        statusCode: 400);
+                }
+            }
+            catch (Exception ex)
+            {
+                return Results.Json(
+                    new { error = "unregistration_failed", message = ex.Message },
+                    statusCode: 500);
+            }
+        });
+
         var cts = new CancellationTokenSource();
 
         // Start Kestrel on a background thread — main STA thread is reserved for WinForms
-        Task.Run(() => app.RunAsync("http://127.0.0.1:17289", cts.Token));
+        app.Urls.Add("http://127.0.0.1:17289");
+        Task.Run(() => app.RunAsync(cts.Token));
 
         // Run WinForms message loop on main STA thread (required for TWAIN + NotifyIcon)
         var fileManager = app.Services.GetRequiredService<TempFileManager>();
